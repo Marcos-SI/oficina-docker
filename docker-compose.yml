@@ -1,0 +1,52 @@
+services:
+  # 1. BANCO DE DADOS
+  db:
+    image: mysql:8.0
+    container_name: sgcm_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sgcm
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck: # Garante que o banco está pronto antes da API tentar conectar
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # 2. BACKEND (Java/Spring)
+  api:
+    build: ./sgcmapi # Aponta para a pasta onde está o Dockerfile da API
+    container_name: sgcm_api
+    environment:
+      DB_NAME: sgcm
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_HOST: db # Aponta para o nome do serviço do banco acima
+      DB_PORT: 3306
+      SERVER_PORT: 9000
+      DDL_AUTO: create-drop
+    ports:
+      - "9000:9000"
+    depends_on:
+      db:
+        condition: service_healthy # Só sobe a API se o banco passar no healthcheck
+
+  # 3. FRONTEND (Node/Angular)
+  app:
+    build: ./sgcmapp # Aponta para a pasta onde está o Dockerfile do Frontend
+    container_name: sgcm_app
+    volumes:
+      - ./sgcmapp:/app
+      - /app/node_modules 
+    ports:
+      - "4200:4200"
+    depends_on:
+      - api
+    command: npm start -- --host 0.0.0.0 --port 4200 --poll 2000
+
+volumes:
+  mysql_data: 
